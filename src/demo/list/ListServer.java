@@ -44,7 +44,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import parallelism.late.CBASEServiceReplica;
+import parallelism.late.LateServiceReplica;
 import parallelism.late.ConflictDefinition;
 import parallelism.MessageContextPair;
 import parallelism.ParallelMapping;
@@ -72,8 +72,8 @@ public final class ListServer implements SingleExecutable {
             ConflictDefinition cd = new ConflictDefinition() {
                 @Override
                 public boolean isDependent(MessageContextPair r1, MessageContextPair r2) {
-                    if(r1.classId == ParallelMapping.SYNC_ALL ||
-                            r2.classId == ParallelMapping.SYNC_ALL){
+                    if(r1.opId == ParallelMapping.SYNC_ALL ||
+                            r2.opId == ParallelMapping.SYNC_ALL){
                         return true;
                     }
                     return false;
@@ -81,13 +81,13 @@ public final class ListServer implements SingleExecutable {
             };
             
             if(gType.equals("coarseLock")){
-                new CBASEServiceReplica(id, this, null, initThreads, cd, COSType.coarseLockGraph);
+                new LateServiceReplica(id, this, null, initThreads, cd, COSType.coarseLockGraph,1);
             }else if (gType.equals("fineLock")){
-                new CBASEServiceReplica(id, this, null, initThreads, cd, COSType.fineLockGraph);
+                new LateServiceReplica(id, this, null, initThreads, cd, COSType.fineLockGraph,1);
             }else if (gType.equals("lockFree")){
-                new CBASEServiceReplica(id, this, null, initThreads, cd, COSType.lockFreeGraph);
+                new LateServiceReplica(id, this, null, initThreads, cd, COSType.lockFreeGraph,1);
             }else{
-                new CBASEServiceReplica(id, this, null, initThreads, cd, null);
+                new LateServiceReplica(id, this, null, initThreads, cd, null,1);
             }
         } else {
             System.out.println("Replica in parallel execution model (early scheduling).");

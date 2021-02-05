@@ -25,6 +25,7 @@ import bftsmart.tom.util.TOMUtil;
 import bftsmart.util.MultiOperationRequest;
 import bftsmart.util.ThroughputStatistics;
 import demo.list.ListClientMO;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
@@ -47,10 +48,9 @@ import parallelism.scheduler.Scheduler;
  */
 public class SequentialServiceReplica extends ServiceReplica {
 
-    protected Scheduler scheduler;
     public ThroughputStatistics statistics;
 
-    protected Map<String, MultiOperationCtx> ctxs = new Hashtable<>();
+    //protected Map<String, MultiOperationCtx> ctxs = new Hashtable<>();
 
     public SequentialServiceReplica(int id, Executable executor, Recoverable recoverer) {
         //this(id, executor, recoverer, new DefaultScheduler(initialWorkers));
@@ -62,7 +62,7 @@ public class SequentialServiceReplica extends ServiceReplica {
     @Override
     public void receiveMessages(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) {
 
-        Iterator<String> it = ctxs.keySet().iterator();
+        /*Iterator<String> it = ctxs.keySet().iterator();
 
         while (it.hasNext()) {
             String next = it.next();
@@ -72,7 +72,7 @@ public class SequentialServiceReplica extends ServiceReplica {
                 it.remove();
             }
 
-        }
+        }*/
 
         //int numRequests = 0;
         int consensusCount = 0;
@@ -111,8 +111,17 @@ public class SequentialServiceReplica extends ServiceReplica {
                         statistics.start();
 
                         for (int i = 0; i < reqs.operations.length; i++) {
-                            MessageContextPair msg = new MessageContextPair(request, reqs.operations[i].classId, i, reqs.operations[i].data);
-                            msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                            MessageContextPair msg = new MessageContextPair(request, request.groupId, i, reqs.operations[i], reqs.opId, ctx);
+
+                            byte[] requestByte = new byte[4];
+
+                            requestByte[0] = (byte) (reqs.opId >> 8);
+                            requestByte[1] = (byte) (reqs.opId);
+
+                            requestByte[2] = (byte) (reqs.operations[i] >> 8);
+                            requestByte[3] = (byte) (reqs.operations[i]);
+
+                            msg.resp = ((SingleExecutable) executor).executeOrdered(requestByte, null);
                             ctx.add(msg.index, msg.resp);
                             statistics.computeStatistics(0, 1);
 
@@ -185,59 +194,5 @@ public class SequentialServiceReplica extends ServiceReplica {
 
             consensusCount++;
         }
-        if (SVController.hasUpdates()) {
-
-            this.scheduler.scheduleReplicaReconfiguration();
-
-        }
     }
-
-    /**
-     * This method initializes the object
-     *
-     * @param cs Server side communication System
-     * @param conf Total order messaging configuration
-     */
-    /* private void initTOMLayer() {
-        if (tomStackCreated) { // if this object was already initialized, don't do it again
-            return;
-        }
-
-        if (!SVController.isInCurrentView()) {
-            throw new RuntimeException("I'm not an acceptor!");
-        }
-
-        // Assemble the total order messaging layer
-        MessageFactory messageFactory = new MessageFactory(id);
-
-        Acceptor acceptor = new Acceptor(cs, messageFactory, SVController);
-        cs.setAcceptor(acceptor);
-
-        Proposer proposer = new Proposer(cs, messageFactory, SVController);
-
-        ExecutionManager executionManager = new ExecutionManager(SVController, acceptor, proposer, id);
-
-        acceptor.setExecutionManager(executionManager);
-
-        tomLayer = new ParallelTOMLayer(executionManager, this, recoverer, acceptor, cs, SVController, verifier);
-
-        executionManager.setTOMLayer(tomLayer);
-
-        SVController.setTomLayer(tomLayer);
-
-        cs.setTOMLayer(tomLayer);
-        cs.setRequestReceiver(tomLayer);
-
-        acceptor.setTOMLayer(tomLayer);
-
-        if (SVController.getStaticConf().isShutdownHookEnabled()) {
-            Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(tomLayer));
-        }
-        tomLayer.start(); // start the layer execution
-        tomStackCreated = true;
-
-        replicaCtx = new ReplicaContext(cs, SVController);
-    }*/
-  
-
 }

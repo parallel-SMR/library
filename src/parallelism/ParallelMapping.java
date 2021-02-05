@@ -7,9 +7,11 @@ package parallelism;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
+import parallelism.hibrid.early.SPSCQueue;
 
 
 /**
@@ -18,15 +20,15 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class ParallelMapping {
 
-    public static int CONC_ALL = -1;
-    public static int SYNC_ALL = -2;
-    public static int CONFLICT_RECONFIGURATION = -3;
+    public static short CONC_ALL = -1;
+    public static short SYNC_ALL = -2;
+    public static short CONFLICT_RECONFIGURATION = -3;
 
     private ClassToThreads[] classes;
     //private Map<Integer, CyclicBarrier> barriers = new HashMap<Integer, CyclicBarrier>();
     //private Map<Integer, Integer> executorThread = new HashMap<Integer, Integer>();
 
-    private BlockingQueue[] queues;
+    private Queue[] queues;
     private CyclicBarrier reconfBarrier;
 
    // private CyclicBarrier reconfThreadBarrier;
@@ -47,16 +49,20 @@ public class ParallelMapping {
         //this.minNumberOfThreads = minNumberOfThreads;
         //this.numberOfthreadsAC = numberOfThreads;
         
-        queues = new BlockingQueue[numberOfThreads];
+        queues = new Queue[numberOfThreads];
         
         for (int i = 0; i < queues.length; i++) {
             //queues[i] = new LinkedBlockingQueue();
-            queues[i] = new FIFOQueue();
+            //queues[i] = new FIFOQueue();
+            queues[i] = new SPSCQueue(10000000);
+            
         } 
         this.classes = cToT;
         
         for(int i = 0; i < this.classes.length;i++){
-            BlockingQueue[] q = new BlockingQueue[this.classes[i].tIds.length];
+            Queue[] q = new Queue[this.classes[i].tIds.length];
+            
+            
             for(int j = 0; j < q.length; j++){
                 q[j] = queues[this.classes[i].tIds[j]];
             }
@@ -98,7 +104,7 @@ public class ParallelMapping {
         return reconfBarrier;
     }
     
-    public BlockingQueue[] getAllQueues() {
+    public Queue[] getAllQueues() {
         return queues;
     }
 

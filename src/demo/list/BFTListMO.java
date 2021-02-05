@@ -24,7 +24,7 @@ public class BFTListMO<V> extends BFTList<V> {
     }
 
     public boolean add(V[] e) {
-        try {
+       /* try {
             MultiOperationRequest mo = new MultiOperationRequest(e.length);
             for (int i = 0; i < e.length; i++) {
                 out = new ByteArrayOutputStream();
@@ -36,7 +36,7 @@ public class BFTListMO<V> extends BFTList<V> {
                 out1.writeObject(e[i]);
                 out1.close();
 
-                mo.add(i, out.toByteArray(), ParallelMapping.SYNC_ALL);
+                mo.add(i, out.toByteArray(), ParallelMapping.SYNC_ALL,ParallelMapping.SYNC_ALL);
 
             }
             byte[] rep = null;
@@ -44,7 +44,7 @@ public class BFTListMO<V> extends BFTList<V> {
                     rep = proxy.invokeParallel(mo.serialize(), ParallelMapping.SYNC_ALL);
             } else {
                 rep = proxy.invokeOrdered(mo.serialize());
-            }
+            }*/
             
             
             /*
@@ -64,14 +64,14 @@ public class BFTListMO<V> extends BFTList<V> {
             */
             return true;
 
-        } catch (IOException ex) {
+      /*  } catch (IOException ex) {
             ex.printStackTrace();
             return false;
-        }
+        }*/
     }
 
     public boolean contains(V[] e) {
-        try {
+        /*try {
             MultiOperationRequest mo = new MultiOperationRequest(e.length);
             for (int i = 0; i < e.length; i++) {
 
@@ -83,15 +83,15 @@ public class BFTListMO<V> extends BFTList<V> {
                 ObjectOutputStream out1 = new ObjectOutputStream(out);
                 out1.writeObject(e[i]);
                 out1.close();
-                mo.add(i, out.toByteArray(), ParallelMapping.CONC_ALL);
+                mo.add(i, out.toByteArray(), ParallelMapping.CONC_ALL,ParallelMapping.CONC_ALL);
 
-            }
+            }*/
             //byte[] rep = null;
-            if (parallel) {
+           /* if (parallel) {
                     proxy.invokeParallel(mo.serialize(), ParallelMapping.CONC_ALL);
             } else {
                 proxy.invokeOrdered(mo.serialize());
-            }
+            }*/
             /*
             MultiOperationResponse resp = new MultiOperationResponse(rep);
             
@@ -109,10 +109,10 @@ public class BFTListMO<V> extends BFTList<V> {
             */
             
             return true;
-        } catch (IOException ex) {
+        /*} catch (IOException ex) {
             ex.printStackTrace();
             return false;
-        }
+        }*/
     }
 
 }

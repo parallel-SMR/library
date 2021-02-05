@@ -6,7 +6,7 @@
 package parallelism.late.graph;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import parallelism.late.CBASEScheduler;
+import parallelism.late.ConflictDefinition;
 
 /**
  *
@@ -14,8 +14,8 @@ import parallelism.late.CBASEScheduler;
  */
 public class LockFreeGraph extends DependencyGraph {
 
-    public LockFreeGraph(int limit, CBASEScheduler scheduler) {
-        super(limit, scheduler);
+    public LockFreeGraph(int limit, ConflictDefinition cd) {
+        super(limit, cd);
 
         head = new LockFreeNode(null, Vertex.HEAD);
         tail = new LockFreeNode(null, Vertex.TAIL);
@@ -24,6 +24,7 @@ public class LockFreeGraph extends DependencyGraph {
         System.out.println("Configured with lockFree graph.");
     }
 
+    
     @Override
     public int COSInsert(Object request) throws InterruptedException {
 
@@ -100,7 +101,7 @@ public class LockFreeGraph extends DependencyGraph {
         public AtomicBoolean removedAtomic;
         public AtomicBoolean readyAtomic;
 
-        public boolean inserted = false;
+        public volatile boolean inserted = false;
         
         eNode headDepOn;
         eNode tailDepOn;

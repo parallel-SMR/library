@@ -37,11 +37,13 @@ public class ThroughputStatistics {
     private int numT = 0;
     private int id;
 
+    private String path = "";
     //private Timer timer = new Timer();
     public ThroughputStatistics(int id, int numThreads, String filePath, String print) {
         this.print = print;
         this.id = id;
         numT = numThreads;
+        this.path = filePath;
         counters = new int[numThreads][interval + 1];
         //restart = new boolean[numThreads];
         for (int i = 0; i < numThreads; i++) {
@@ -75,12 +77,15 @@ public class ThroughputStatistics {
             //System.out.println("Throughput at " + print + " = " + tp + " operations/sec in sec : " + now);
             pw.println(time + " " + tp);
         }
+       
         pw.flush();
-        loadTP("results_"+id+".txt");
+        double tpAv = loadTP(this.path);
+        pw.println("Average " + tpAv);
+        pw.flush();
 
     }
     
-    private void loadTP(String path) {
+    private double loadTP(String path) {
         try {
 
             FileReader fr = new FileReader(path);
@@ -147,9 +152,12 @@ public class ThroughputStatistics {
             
             System.out.println("Media: "+((md1+md2)/2));*/
             //System.out.println("Sum: " + sum);
-            System.out.println("Throughput: " + (sum / l.size()));
+            double ret = sum / l.size();
+            System.out.println("Throughput: " + ret);
+            return ret;
         } catch (Exception e) {
             e.printStackTrace(System.out);
+            return 0;
         }
     }
 
@@ -226,7 +234,7 @@ public class ThroughputStatistics {
             try{
                 counters[threadId][now] = counters[threadId][now] + amount;
             }catch(ArrayIndexOutOfBoundsException ignore){
-                
+                //ignore.printStackTrace();
             }
         }
 

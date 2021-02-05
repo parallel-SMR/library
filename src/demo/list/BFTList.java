@@ -27,11 +27,11 @@ import parallelism.ParallelMapping;
  */
 public class BFTList<V> implements List<V> {
 
-    static final int CONTAINS = 1;
-    static final int ADD = 2;
-    static final int GET = 3;
-    static final int REMOVE = 4;
-    static final int SIZE = 5;
+    public static final int CONTAINS = 1;
+    public static final int ADD = 2;
+    public static final int GET = 3;
+    public static final int REMOVE = 4;
+    public static final int SIZE = 5;
 
     protected ParallelServiceProxy proxy = null;
     protected ByteArrayOutputStream out = null;

@@ -25,15 +25,19 @@ import bftsmart.tom.util.TOMUtil;
 import bftsmart.util.MultiOperationRequest;
 import bftsmart.util.ThroughputStatistics;
 import demo.list.ListClientMO;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.logging.Level;
@@ -50,23 +54,19 @@ public class ParallelServiceReplica extends ServiceReplica {
     protected Scheduler scheduler;
     public ThroughputStatistics statistics;
 
-    protected Map<String, MultiOperationCtx> ctxs = new Hashtable<>();
-
+    //protected Map<String, MultiOperationCtx> ctxs = new Hashtable<>();
     public ParallelServiceReplica(int id, Executable executor, Recoverable recoverer, int initialWorkers) {
         //this(id, executor, recoverer, new DefaultScheduler(initialWorkers));
         super(id, executor, recoverer);
-        if (initialWorkers <= 0) {
-            initialWorkers = 1;
-        }
-        int[] ids = new int[initialWorkers];
-        for (int i = 0; i < ids.length; i++) {
-            ids[i] = i;
-        }
-        ClassToThreads[] cts = new ClassToThreads[2];
-        cts[0] = new ClassToThreads(ParallelMapping.CONC_ALL, ClassToThreads.CONC, ids);
-        cts[1] = new ClassToThreads(ParallelMapping.SYNC_ALL, ClassToThreads.SYNC, ids);
-        this.scheduler = new DefaultScheduler(initialWorkers, cts);
+
+        createScheduler(initialWorkers);
+        
+        String path = "resultsEarly_" + id + "_" + 1 + "_" + initialWorkers + ".txt";
+        statistics = new ThroughputStatistics(id, initialWorkers, path, "");
+        
         initWorkers(this.scheduler.getNumWorkers(), id);
+        
+        
     }
 
     public ParallelServiceReplica(int id, Executable executor, Recoverable recoverer, Scheduler s) {
@@ -80,6 +80,7 @@ public class ParallelServiceReplica extends ServiceReplica {
     public ParallelServiceReplica(int id, Executable executor, Recoverable recoverer, int initialWorkers, ClassToThreads[] cts) {
         //this(id, executor, recoverer, new DefaultScheduler(initialWorkers));
         super(id, executor, recoverer);
+
         if (initialWorkers <= 0) {
             initialWorkers = 1;
         }
@@ -87,6 +88,21 @@ public class ParallelServiceReplica extends ServiceReplica {
         this.scheduler = new DefaultScheduler(initialWorkers, cts);
 
         initWorkers(this.scheduler.getNumWorkers(), id);
+    }
+
+    protected void createScheduler(int initialWorkers) {
+        if (initialWorkers <= 0) {
+            initialWorkers = 1;
+        }
+        int[] ids = new int[initialWorkers];
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = i;
+        }
+        ClassToThreads[] cts = new ClassToThreads[2];
+        cts[0] = new ClassToThreads(ParallelMapping.CONC_ALL, ClassToThreads.CONC, ids);
+        cts[1] = new ClassToThreads(ParallelMapping.SYNC_ALL, ClassToThreads.SYNC, ids);
+        this.scheduler = new DefaultScheduler(initialWorkers, cts);
+
     }
 
 
@@ -116,11 +132,11 @@ public class ParallelServiceReplica extends ServiceReplica {
             useBarrier = false;
         }*/
 
-        statistics = new ThroughputStatistics(id, n, "results_" + id + ".txt", "");
+       // statistics = new ThroughputStatistics(id, n, "early" + id + ".txt", "");
 
         int tid = 0;
         for (int i = 0; i < n; i++) {
-            new ServiceReplicaWorker((FIFOQueue) this.scheduler.getMapping().getAllQueues()[i], tid).start();
+            new ServiceReplicaWorker(this.scheduler.getMapping().getAllQueues()[i], tid).start();
             tid++;
         }
     }
@@ -156,18 +172,6 @@ public class ParallelServiceReplica extends ServiceReplica {
     @Override
     public void receiveMessages(int consId[], int regencies[], int leaders[], CertifiedDecision[] cDecs, TOMMessage[][] requests) {
 
-        Iterator<String> it = ctxs.keySet().iterator();
-
-        while (it.hasNext()) {
-            String next = it.next();
-            MultiOperationCtx cx = ctxs.get(next);
-
-            if (cx.finished) {
-                it.remove();
-            }
-
-        }
-
         //int numRequests = 0;
         int consensusCount = 0;
         boolean noop = true;
@@ -197,16 +201,15 @@ public class ParallelServiceReplica extends ServiceReplica {
                         request.deliveryTime = System.nanoTime();
                          */
 
-                        MultiOperationRequest reqs = new MultiOperationRequest(request.getContent());
-
-                        MultiOperationCtx ctx = new MultiOperationCtx(reqs.operations.length, request);
-
-                        this.ctxs.put(request.toString(), ctx);
-
+                        //MultiOperationRequest reqs = new MultiOperationRequest(request.getContent());
+                        // MultiOperationCtx ctx = new MultiOperationCtx(reqs.operations.length, request);
+                        //this.ctxs.put(request.toString(), ctx);
                         statistics.start();
-                        for (int i = 0; i < reqs.operations.length; i++) {
-                            this.scheduler.schedule(new MessageContextPair(request, reqs.operations[i].classId, i, reqs.operations[i].data));
-                        }
+                        this.scheduler.schedule(request);
+                        /*for (int i = 0; i < reqs.operations.length; i++) {
+                            this.scheduler.schedule(new MessageContextPair(request, request.groupId, i, reqs.operations[i], reqs.opId));
+                           
+                        }*/
 
                     } else if (request.getReqType() == TOMMessageType.RECONFIG) {
 
@@ -325,75 +328,106 @@ public class ParallelServiceReplica extends ServiceReplica {
         replicaCtx = new ReplicaContext(cs, SVController);
     }
 
-    /*  private class SenderWorker extends Thread {
-
-        private FIFOQueue<MultiOperationCtx> responses;
-
-        public SenderWorker(FIFOQueue<MultiOperationCtx> responses) {
-            this.responses = responses;
-        }
-
-        @Override
-        public void run() {
-
-            MultiOperationCtx resp = null;
-            ExecutionFIFOQueue<MultiOperationCtx> execQueue = new ExecutionFIFOQueue();
-            while (true) {
-
-                try {
-
-                    this.responses.drainToQueue(execQueue);
-
-                    do {
-
-                        resp = execQueue.getNext();
-
-                        resp.request.reply = new TOMMessage(id, resp.request.getSession(),
-                                resp.request.getSequence(), resp.response.serialize(), SVController.getCurrentViewId());
-                        //bftsmart.tom.util.Logger.println("(ParallelServiceReplica.receiveMessages) sending reply to "
-                        //      + msg.message.getSender());
-                        replier.manageReply(resp.request, null);
-
-                    } while (execQueue.goToNext());
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-
-    }*/
-    
     private class ServiceReplicaWorker extends Thread {
 
-        private FIFOQueue<MessageContextPair> requests;
+        private Queue<MessageContextPair> requests;
         private int thread_id;
 
-        public ServiceReplicaWorker(FIFOQueue<MessageContextPair> requests, int id) {
+        public ServiceReplicaWorker(Queue<MessageContextPair> requests, int id) {
             this.thread_id = id;
             this.requests = requests;
         }
 
         int localC = 0;
         int localTotal = 0;
-        
+
+        public byte[] serialize(short opId, short value) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream oos = new DataOutputStream(baos);
+
+                oos.writeShort(opId);
+
+                oos.writeShort(value);
+
+                oos.close();
+                return baos.toByteArray();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
+
+        private void execute(MessageContextPair msg) {
+            //msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+            msg.resp = ((SingleExecutable) executor).executeOrdered(serialize(msg.opId, msg.operation), null);
+            msg.ctx.add(msg.index, msg.resp);
+            if (msg.ctx.response.isComplete() && !msg.ctx.finished && (msg.ctx.interger.getAndIncrement() == 0)) {
+                msg.ctx.finished = true;
+                msg.ctx.request.reply = new TOMMessage(id, msg.ctx.request.getSession(),
+                        msg.ctx.request.getSequence(), msg.ctx.response.serialize(), SVController.getCurrentViewId());
+                replier.manageReply(msg.ctx.request, null);
+            }
+            statistics.computeStatistics(thread_id, 1);
+        }
+
         public void run() {
-            MessageContextPair msg = null;
+
+            while (true) {
+
+                MessageContextPair msg = requests.poll();
+                if (msg != null) {
+                    try {
+                        //EDUARDO: Não funciona com reconfiguração no conjunto de replicas, precisa colocar uma classe para isso em ClassToThreads com type = REC.
+                        ClassToThreads ct = scheduler.getMapping().getClass(msg.classId);
+
+                        if (ct.type == ClassToThreads.CONC) {
+                            //System.out.println("Thread " + thread_id + " vai executar uma operacao conflict none! " + msg.message.toString());
+                            //sleep(5000);
+                            //System.exit(0);
+                            execute(msg);
+
+                        } else if (ct.type == ClassToThreads.SYNC && ct.tIds.length == 1) {//SYNC mas só com 1 thread, não precisa usar barreira
+                            execute(msg);
+                        } else if (ct.type == ClassToThreads.SYNC) {
+
+                            if (thread_id == scheduler.getMapping().getExecutorThread(msg.classId)) {
+
+                                scheduler.getMapping().getBarrier(msg.classId).await();
+                                // System.out.println("Thread " + thread_id + " );
+
+                                execute(msg);
+
+                                scheduler.getMapping().getBarrier(msg.classId).await();
+
+                            } else {
+                                scheduler.getMapping().getBarrier(msg.classId).await();
+                                //System.out.println(">>>Thread " + thread_id + " vai aguardar a execucao de uma operacao conflict: " + msg.message.groupId);
+                                scheduler.getMapping().getBarrier(msg.classId).await();
+                            }
+
+                        } else if (msg.classId == ParallelMapping.CONFLICT_RECONFIGURATION) {
+                            scheduler.getMapping().getReconfBarrier().await();
+                            //System.out.println(">>>Thread " + thread_id + " vai aguardar uma reconfiguração!");
+                            scheduler.getMapping().getReconfBarrier().await();
+
+                        }
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(ParallelServiceReplica.class.getName()).log(Level.SEVERE, null, ex);
+                    } catch (BrokenBarrierException ex) {
+                        Logger.getLogger(ParallelServiceReplica.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+
+                }
+
+            }
+        }
+
+        public void runOld() {
+            /*MessageContextPair msg = null;
 
             ExecutionFIFOQueue<MessageContextPair> execQueue = new ExecutionFIFOQueue();
 
-            /*(new Timer()).scheduleAtFixedRate(new TimerTask() {
-                public void run() {
-                   if(localC > 0){
-                        int media = localTotal/localC;
-                        System.out.println("Thread "+thread_id+": "+media);
-                   }else{
-                       System.out.println("Thread "+thread_id+": "+0);
-                   }
-                }
-            }, 1000, 1000);*/
-            
-            
             while (true) {
 
                 try {
@@ -401,7 +435,7 @@ public class ParallelServiceReplica extends ServiceReplica {
                     this.requests.drainToQueue(execQueue);
                     localC++;
                     localTotal = localTotal + execQueue.getSize();
-                    System.out.println("Thread "+thread_id+": "+execQueue.getSize());
+                    System.out.println("Thread " + thread_id + ": " + execQueue.getSize());
 
                     do {
 
@@ -417,32 +451,36 @@ public class ParallelServiceReplica extends ServiceReplica {
                             //sleep(5000);
                             //System.exit(0);
 
-                            msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                            //msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                            msg.resp = ((SingleExecutable) executor).executeOrdered(serialize(msg.opId, msg.operation), null);
 
-                            MultiOperationCtx ctx = ctxs.get(msg.request.toString());
+                            //MultiOperationCtx ctx = ctxs.get(msg.request.toString());
 
-                            ctx.add(msg.index, msg.resp);
+                            msg.ctx.add(msg.index, msg.resp);
 
-                            if (ctx.response.isComplete() && !ctx.finished && (ctx.interger.getAndIncrement() == 0)) {
-                                ctx.finished = true;
-                                ctx.request.reply = new TOMMessage(id, ctx.request.getSession(),
-                                        ctx.request.getSequence(), ctx.response.serialize(), SVController.getCurrentViewId());
+                            if (msg.ctx.response.isComplete() && !msg.ctx.finished && (msg.ctx.interger.getAndIncrement() == 0)) {
+                                msg.ctx.finished = true;
+                                msg.ctx.request.reply = new TOMMessage(id, msg.ctx.request.getSession(),
+                                        msg.ctx.request.getSequence(), msg.ctx.response.serialize(), SVController.getCurrentViewId());
                                 //bftsmart.tom.util.Logger.println("(ParallelServiceReplica.receiveMessages) sending reply to "+ msg.message.getSender());
-                                replier.manageReply(ctx.request, null);
+                                replier.manageReply(msg.ctx.request, null);
+                               
                             }
                             statistics.computeStatistics(thread_id, 1);
 
                         } else if (ct.type == ClassToThreads.SYNC && ct.tIds.length == 1) {//SYNC mas só com 1 thread, não precisa usar barreira
-                            msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
-                            MultiOperationCtx ctx = ctxs.get(msg.request.toString());
-                            ctx.add(msg.index, msg.resp);
-                            if (ctx.response.isComplete() && !ctx.finished && (ctx.interger.getAndIncrement() == 0)) {
-                                ctx.finished = true;
-                                ctx.request.reply = new TOMMessage(id, ctx.request.getSession(),
-                                        ctx.request.getSequence(), ctx.response.serialize(), SVController.getCurrentViewId());
+                            //msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                            msg.resp = ((SingleExecutable) executor).executeOrdered(serialize(msg.opId, msg.operation), null);
+
+                           // MultiOperationCtx ctx = ctxs.get(msg.request.toString());
+                            msg.ctx.add(msg.index, msg.resp);
+                            if (msg.ctx.response.isComplete() && !msg.ctx.finished && (msg.ctx.interger.getAndIncrement() == 0)) {
+                                msg.ctx.finished = true;
+                                msg.ctx.request.reply = new TOMMessage(id, msg.ctx.request.getSession(),
+                                        msg.ctx.request.getSequence(), msg.ctx.response.serialize(), SVController.getCurrentViewId());
                                 //bftsmart.tom.util.Logger.println("(ParallelServiceReplica.receiveMessages) sending reply to "
                                 //      + msg.message.getSender());
-                                replier.manageReply(ctx.request, null);
+                                replier.manageReply(msg.ctx.request, null);
 
                             }
                             statistics.computeStatistics(thread_id, 1);
@@ -450,16 +488,18 @@ public class ParallelServiceReplica extends ServiceReplica {
                             if (thread_id == scheduler.getMapping().getExecutorThread(msg.classId)) {
                                 scheduler.getMapping().getBarrier(msg.classId).await();
                                 // System.out.println("Thread " + thread_id + " );
-                                msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
-                                MultiOperationCtx ctx = ctxs.get(msg.request.toString());
-                                ctx.add(msg.index, msg.resp);
-                                if (ctx.response.isComplete() && !ctx.finished && (ctx.interger.getAndIncrement() == 0)) {
-                                    ctx.finished = true;
-                                    ctx.request.reply = new TOMMessage(id, ctx.request.getSession(),
-                                            ctx.request.getSequence(), ctx.response.serialize(), SVController.getCurrentViewId());
+                                //msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                                msg.resp = ((SingleExecutable) executor).executeOrdered(serialize(msg.opId, msg.operation), null);
+
+                               // MultiOperationCtx ctx = ctxs.get(msg.request.toString());
+                                msg.ctx.add(msg.index, msg.resp);
+                                if (msg.ctx.response.isComplete() && !msg.ctx.finished && (msg.ctx.interger.getAndIncrement() == 0)) {
+                                    msg.ctx.finished = true;
+                                    msg.ctx.request.reply = new TOMMessage(id, msg.ctx.request.getSession(),
+                                            msg.ctx.request.getSequence(), msg.ctx.response.serialize(), SVController.getCurrentViewId());
                                     //bftsmart.tom.util.Logger.println("(ParallelServiceReplica.receiveMessages) sending reply to "
                                     //      + msg.message.getSender());
-                                    replier.manageReply(ctx.request, null);
+                                    replier.manageReply(msg.ctx.request, null);
 
                                 }
                                 statistics.computeStatistics(thread_id, 1);
@@ -476,23 +516,6 @@ public class ParallelServiceReplica extends ServiceReplica {
                             scheduler.getMapping().getReconfBarrier().await();
 
                         }
-                        /*else if (msg.classId == ParallelMapping.THREADS_RECONFIGURATION) {
-                            if (thread_id == 0) {
-                                scheduler.getMapping().getReconfThreadBarrier().await();
-                                //ATUALIZAR AS BARREIRAS CONFLIC_ALL
-                                //Utilizei o campo "sender" para armazenar o nextN
-                                scheduler.getMapping().reconfigureBarrier(msg.request.getSender());
-                                //Thread.sleep(1000);
-                                scheduler.getMapping().getReconfThreadBarrier().await();
-                                //System.out.println(">>>Thread " + thread_id + " SAIU DA BARREIRA");
-                            } else {
-                                scheduler.getMapping().getReconfThreadBarrier().await();
-                                //System.out.println(">>>Thread " + thread_id + " ESPERANDO RECONFIGURACAO DE NUM T");
-                                //Thread.sleep(1000);
-                                scheduler.getMapping().getReconfThreadBarrier().await();
-                                //System.out.println(">>>Thread " + thread_id + "SAIU DA BARREIRA");
-                            }
-                        } */
 
                     } while (execQueue.goToNext());
                 } catch (Exception ie) {
@@ -501,7 +524,7 @@ public class ParallelServiceReplica extends ServiceReplica {
                 }
 
             }
-
+             */
         }
 
     }

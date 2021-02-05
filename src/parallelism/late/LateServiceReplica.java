@@ -10,6 +10,8 @@ import bftsmart.tom.server.Executable;
 import bftsmart.tom.server.Recoverable;
 import bftsmart.tom.server.SingleExecutable;
 import bftsmart.util.ThroughputStatistics;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.util.concurrent.CyclicBarrier;
 import parallelism.MessageContextPair;
 import parallelism.MultiOperationCtx;
@@ -21,13 +23,14 @@ import parallelism.late.graph.DependencyGraph;
  *
  * @author eduardo
  */
-public class CBASEServiceReplica extends ParallelServiceReplica {
+public class LateServiceReplica extends ParallelServiceReplica {
 
     private CyclicBarrier recBarrier = new CyclicBarrier(2);
 
-    public CBASEServiceReplica(int id, Executable executor, Recoverable recoverer, int numWorkers, ConflictDefinition cf, COSType graphType) {
-        super(id, executor, recoverer, new CBASEScheduler(cf, numWorkers, graphType));
-
+    public LateServiceReplica(int id, Executable executor, Recoverable recoverer, int numWorkers, ConflictDefinition cf, COSType graphType, int partitions) {
+        super(id, executor, recoverer, new LateScheduler(cf, numWorkers, graphType));
+        String path = "resultsLockFree_" + id + "_"+ partitions + "_"+ numWorkers + ".txt";
+        statistics = new ThroughputStatistics(id, numWorkers, path, "late");
     }
 
     public CyclicBarrier getReconfBarrier() {
@@ -42,27 +45,44 @@ public class CBASEServiceReplica extends ParallelServiceReplica {
     @Override
     protected void initWorkers(int n, int id) {
 
-        statistics = new ThroughputStatistics(id, n, "results_" + id + ".txt", "");
+        //statistics = new ThroughputStatistics(id, n, "results_" + id + ".txt", "");
 
         int tid = 0;
         for (int i = 0; i < n; i++) {
-            new CBASEServiceReplicaWorker((CBASEScheduler) this.scheduler, tid).start();
+            new LateServiceReplicaWorker((LateScheduler) this.scheduler, tid).start();
             tid++;
         }
     }
 
-    private class CBASEServiceReplicaWorker extends Thread {
+    private class LateServiceReplicaWorker extends Thread {
 
-        private CBASEScheduler s;
+        private LateScheduler s;
         private int thread_id;
 
-        public CBASEServiceReplicaWorker(CBASEScheduler s, int id) {
+        public LateServiceReplicaWorker(LateScheduler s, int id) {
             this.thread_id = id;
             this.s = s;
 
             //System.out.println("Criou um thread: " + id);
         }
         //int exec = 0;
+        
+        public byte[] serialize(short opId, short value) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                DataOutputStream oos = new DataOutputStream(baos);
+
+                oos.writeShort(opId);
+
+                oos.writeShort(value);
+
+                oos.close();
+                return baos.toByteArray();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return null;
+        }
 
         public void run() {
             //System.out.println("rum: " + thread_id);
@@ -82,20 +102,21 @@ public class CBASEServiceReplica extends ParallelServiceReplica {
                         ex.printStackTrace();
                     }
                 } else {
-                    msg.resp = ((SingleExecutable) executor).executeOrdered(msg.operation, null);
+                    //msg.resp = ((SingleExecutable) executor).executeOrdered( msg.operation, null);
                     //exec++;
-                    
+                    msg.resp = ((SingleExecutable) executor).executeOrdered(serialize(msg.opId, msg.operation), null);
+
                     //System.out.println(thread_id+" Executadas: "+exec);
                     
-                    MultiOperationCtx ctx = ctxs.get(msg.request.toString());
-                    ctx.add(msg.index, msg.resp);
-                    if (ctx.response.isComplete() && !ctx.finished && (ctx.interger.getAndIncrement() == 0)) {
-                        ctx.finished = true;
-                        ctx.request.reply = new TOMMessage(id, ctx.request.getSession(),
-                                ctx.request.getSequence(), ctx.response.serialize(), SVController.getCurrentViewId());
+                    //MultiOperationCtx ctx = ctxs.get(msg.request.toString());
+                    msg.ctx.add(msg.index, msg.resp);
+                    if (msg.ctx.response.isComplete() && !msg.ctx.finished && (msg.ctx.interger.getAndIncrement() == 0)) {
+                        msg.ctx.finished = true;
+                        msg.ctx.request.reply = new TOMMessage(id, msg.ctx.request.getSession(),
+                                msg.ctx.request.getSequence(), msg.ctx.response.serialize(), SVController.getCurrentViewId());
                         //bftsmart.tom.util.Logger.println("(ParallelServiceReplica.receiveMessages) sending reply to "
                         //      + msg.message.getSender());
-                        replier.manageReply(ctx.request, null);
+                        replier.manageReply(msg.ctx.request, null);
                     }
                     statistics.computeStatistics(thread_id, 1);
                 }

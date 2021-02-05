@@ -5,8 +5,11 @@
  */
 package parallelism.late;
 
+import bftsmart.tom.core.messages.TOMMessage;
+import bftsmart.util.MultiOperationRequest;
 import parallelism.late.graph.COS;
 import parallelism.MessageContextPair;
+import parallelism.MultiOperationCtx;
 import parallelism.ParallelMapping;
 import parallelism.late.graph.CoarseGrainedLock;
 import parallelism.late.graph.FineGrainedLock;
@@ -17,53 +20,62 @@ import parallelism.scheduler.Scheduler;
  *
  * @author eduardo
  */
-public class CBASEScheduler implements Scheduler{
+public class LateScheduler implements Scheduler{
 
     private COS cos;
     private int numWorkers;
     
-     private ConflictDefinition conflictDef;
+     //private ConflictDefinition conflictDef;
     
-    public CBASEScheduler(int numWorkers, COSType cosType) {
+    public LateScheduler(int numWorkers, COSType cosType) {
         this(null, numWorkers, cosType);
     }
 
-    public CBASEScheduler(ConflictDefinition cd, int numWorkers, COSType cosType) {
+    public LateScheduler(ConflictDefinition cd, int numWorkers, COSType cosType) {
         //cos = new COS(150,graphType,this);
         int limit = 150;
-        if(cosType == null || cosType == COSType.coarseLockGraph){
-            this.cos = new CoarseGrainedLock(limit, this);
-        }else if(cosType == COSType.fineLockGraph){
-            this.cos = new FineGrainedLock(limit, this);
-        }else if (cosType == COSType.lockFreeGraph){
-            this.cos = new LockFreeGraph(limit, this);
-        }else{
-           this.cos = new CoarseGrainedLock(limit, this);
-        }
-        this.numWorkers = numWorkers;
+
         if(cd == null){
-            this.conflictDef = new DefaultConflictDefinition();
-        }else{
-            this.conflictDef = cd;
+            cd = new DefaultConflictDefinition();
         }
         
+        if(cosType == null || cosType == COSType.coarseLockGraph){
+            this.cos = new CoarseGrainedLock(limit, cd);
+        }else if(cosType == COSType.fineLockGraph){
+            this.cos = new FineGrainedLock(limit, cd);
+        }else if (cosType == COSType.lockFreeGraph){
+            this.cos = new LockFreeGraph(limit, cd);
+        }else{
+           this.cos = new CoarseGrainedLock(limit, cd);
+        }
+        this.numWorkers = numWorkers;        
     }
 
     
-    public boolean isDependent(MessageContextPair thisRequest, MessageContextPair otherRequest){
+    /*public boolean isDependent(MessageContextPair thisRequest, MessageContextPair otherRequest){
         if(thisRequest.classId == ParallelMapping.CONFLICT_RECONFIGURATION || 
                 otherRequest.classId == ParallelMapping.CONFLICT_RECONFIGURATION){
             return true;
         }
         return this.conflictDef.isDependent(thisRequest, otherRequest);
-    }
+    }*/
     
     
     @Override
     public int getNumWorkers() {
         return this.numWorkers;
     }
+
     
+    
+    @Override
+    public void schedule(TOMMessage request) {
+        MultiOperationRequest reqs = new MultiOperationRequest(request.getContent());
+        MultiOperationCtx ctx = new MultiOperationCtx(reqs.operations.length, request);
+        for (int i = 0; i < reqs.operations.length; i++) {
+            this.schedule(new MessageContextPair(request, request.groupId, i, reqs.operations[i], reqs.opId, ctx));
+        }
+    }
     
     @Override
     public void schedule(MessageContextPair request) {
@@ -95,7 +107,8 @@ public class CBASEScheduler implements Scheduler{
     
     @Override
     public void scheduleReplicaReconfiguration() {
-        MessageContextPair m = new MessageContextPair(null, ParallelMapping.CONFLICT_RECONFIGURATION, -1, null);
+        MessageContextPair m = 
+                new MessageContextPair(null, ParallelMapping.CONFLICT_RECONFIGURATION, -1, (short) 0, (short) ParallelMapping.CONFLICT_RECONFIGURATION,null);
         schedule(m);
     }
 

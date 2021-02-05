@@ -5,6 +5,7 @@
  */
 package parallelism.scheduler;
 
+import bftsmart.tom.core.messages.TOMMessage;
 import parallelism.MessageContextPair;
 import parallelism.ParallelMapping;
 
@@ -15,6 +16,7 @@ import parallelism.ParallelMapping;
  */
 public interface Scheduler {
     public void schedule(MessageContextPair request);
+    public void schedule(TOMMessage request);
     public ParallelMapping getMapping();
     public void scheduleReplicaReconfiguration();
     public int getNumWorkers();

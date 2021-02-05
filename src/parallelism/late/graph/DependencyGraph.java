@@ -8,7 +8,8 @@ package parallelism.late.graph;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import parallelism.MessageContextPair;
-import parallelism.late.CBASEScheduler;
+import parallelism.late.LateScheduler;
+import parallelism.late.ConflictDefinition;
 
 
 /**
@@ -24,8 +25,8 @@ public abstract class DependencyGraph extends COS{
 
     
     
-    public DependencyGraph(int limit, CBASEScheduler scheduler){
-        super(limit,scheduler);
+    public DependencyGraph(int limit, ConflictDefinition cd){
+        super(limit,cd);
         head = new vNode(null, Vertex.HEAD);
         tail = new vNode(null, Vertex.TAIL);
         head.setNext(tail);

@@ -7,7 +7,7 @@ package parallelism.late.graph;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import parallelism.late.CBASEScheduler;
+import parallelism.late.ConflictDefinition;
 
 
 /**
@@ -20,8 +20,8 @@ public class CoarseGrainedLock extends DependencyGraph{
     
     
     
-    public CoarseGrainedLock(int limit, CBASEScheduler scheduler) {
-        super(limit,scheduler);
+    public CoarseGrainedLock(int limit, ConflictDefinition cd) {
+        super(limit,cd);
         System.out.println("Configured with coarseLock graph.");
     }
 

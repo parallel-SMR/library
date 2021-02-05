@@ -7,7 +7,8 @@ package parallelism.late.graph;
 
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import parallelism.late.CBASEScheduler;
+import parallelism.late.LateScheduler;
+import parallelism.late.ConflictDefinition;
 
 /**
  *
@@ -18,8 +19,8 @@ public class FineGrainedLock extends DependencyGraph{
    // private Lock mutex = new ReentrantLock();     // used to serialize only insertions
     
     
-    public FineGrainedLock(int limit, CBASEScheduler scheduler) {
-        super(limit, scheduler);
+    public FineGrainedLock(int limit, ConflictDefinition cd) {
+        super(limit, cd);
         System.out.println("Configured with fineLock graph.");
     }
 

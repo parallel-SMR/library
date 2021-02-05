@@ -17,31 +17,37 @@
 package demo.list;
 
 //import bftsmart.tom.parallelism.ParallelMapping;
+import bftsmart.tom.core.messages.TOMMessage;
 import java.io.IOException;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import bftsmart.util.ExtStorage;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
+import parallelism.MessageContextPair;
+import parallelism.hibrid.early.EarlySchedulerMapping;
+import sun.security.provider.PolicyParser;
 
 /**
  * Example client
  *
  */
-public class ListClientMOMP {
+public class ListClientMOMPHibrid {
 
     public static int initId = 0;
-
-    public static boolean weight = false;
-
     public static boolean stop = false;
+
+    protected static int pG = 0;
+    protected static int pW = 0;
 
     @SuppressWarnings("static-access")
     public static void main(String[] args) throws IOException {
         if (args.length < 8) {
-            System.out.println("Usage: ... ListClient <num. threads> <process id> <number of requests> <interval> <maxIndex> <parallel?> <operations per request> <partitions>");
+            System.out.println("Usage: ... ListClient "
+                    + "<num. threads> <process id> <number of requests> <interval> <maxIndex> <parallel?> <operations per request> <partitions>");
             System.exit(-1);
         }
 
@@ -67,18 +73,18 @@ public class ListClientMOMP {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException ex) {
-                Logger.getLogger(ListClientMOMP.class.getName()).log(Level.SEVERE, null, ex);
+                Logger.getLogger(ListClientMOMPHibrid.class.getName()).log(Level.SEVERE, null, ex);
             }
 
             System.out.println("Launching client " + (initId + i));
-            c[i] = new ListClientMOMP.Client(initId + i, numberOfReqs, numberOfOps, interval, max, p, parallel);
+            c[i] = new ListClientMOMPHibrid.Client(initId + i, numberOfReqs, numberOfOps, interval, max, p, parallel);
             //c[i].start();
         }
 
         try {
             Thread.sleep(300);
         } catch (InterruptedException ex) {
-            Logger.getLogger(ListClientMOMP.class.getName()).log(Level.SEVERE, null, ex);
+            Logger.getLogger(ListClientMOMPHibrid.class.getName()).log(Level.SEVERE, null, ex);
         }
 
         for (int i = 0; i < numThreads; i++) {
@@ -136,6 +142,7 @@ public class ListClientMOMP {
         int opPerReq = 1;
 
         int partitions = 2;
+        public EarlySchedulerMapping mapping;
 
         public Client(int id, int numberOfRqs, int opPerReq, int interval, int maxIndex, int partitions, boolean parallel) {
             super("Client " + id);
@@ -155,6 +162,9 @@ public class ListClientMOMP {
 
             store = new BFTListMOMP<Integer>(id, parallel);
             //this.dos = dos;
+
+            this.mapping = new EarlySchedulerMapping();
+
         }
 
         /*  private boolean insertValue(int index) {
@@ -164,86 +174,91 @@ public class ListClientMOMP {
         }*/
         public void run() {
 
-            //System.out.println("Warm up...");
-            //int req = 0;
-            if (weight) {
-                weighting();
+            ExtStorage sR = new ExtStorage();
+            ExtStorage sW = new ExtStorage();
+            ExtStorage sGR = new ExtStorage();
+            ExtStorage sGW = new ExtStorage();
 
-            } else {
-                int p = 0;
+            System.out.println("Executing experiment for " + numberOfReqs + " ops");
 
-                ExtStorage sR = new ExtStorage();
-                ExtStorage sW = new ExtStorage();
-                ExtStorage sGR = new ExtStorage();
-                ExtStorage sGW = new ExtStorage();
+            Random randOp = new Random();
+            Random randPart = new Random();
+            Random randGlobal = new Random();
+            Random indexRand = new Random();
+            Random confAll = new Random();
+            Random partitonRand = new Random();
 
-                System.out.println("Executing experiment for " + numberOfReqs + " ops");
-
-                Random rand = new Random();
-
-                Random randOp = new Random();
-
-                Random randGlobal = new Random();
-
-                Random indexRand = new Random();
-                int[] allPartitions = new int[partitions];
+            //EarlySchedulerMapping em = new EarlySchedulerMapping();
+            int[] allPartitions = new int[partitions];
             for (int i = 0; i < partitions; i++) {
                 allPartitions[i] = i;
             }
+            int[] conf = new int[2];
 
-//            WorkloadGenerator work = new WorkloadGenerator(numberOfOps);
-                for (int i = 0; i < numberOfReqs && !stop; i++) {
-                    if (i == 1) {
-                        try {
-                            //Thread.currentThread().sleep(20000);
-                            Thread.currentThread().sleep(200);
-                        } catch (InterruptedException ex) {
-                            Logger.getLogger(ListClientMOMP.class.getName()).log(Level.SEVERE, null, ex);
-                        }
+            for (int i = 0; i < numberOfReqs && !stop; i++) {
+                if (i == 1) {
+                    try {
+                        //Thread.currentThread().sleep(20000);
+                        Thread.currentThread().sleep(20000);
+                    } catch (InterruptedException ex) {
+                        Logger.getLogger(ListClientMOMPHibrid.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                }
+
+                int g = randGlobal.nextInt(100);
+                int r = randOp.nextInt(100);
+                int p = 0;
+                int op = 0;
+                int multiP = 0;
+
+                if (partitions > 1 && g < pG) {//global
+                    if (r < pW) {
+                        //GW
+                        p = -1;
+                    } else {
+                        //GR;
+                        p = -2;
                     }
 
-                    int g = randGlobal.nextInt(100);
-                    int r = randOp.nextInt(100);
-                    if (g < 5) {//global: 5%
-                        //p = -2;
-                        if (r < 15) {
-                            //GW
-                            p = -1;
+                    multiP = confAll.nextInt(100);
+                    if (multiP >= 10) { //90% confitos entre dois shards (o resto é com todos os shards)
+                        if (partitions == 2) {
+                            conf[0] = 0;
+                            conf[1] = 1;
                         } else {
-                            //GR;
-                            p = -2;
-                        }
-                    } else{//local
-                        if (r < 15) {
-                            op = BFTList.ADD;
-                        } else {
-                            op = BFTList.CONTAINS;
+                            conf[0] = partitonRand.nextInt(partitions);
+                            do {
+                                conf[1] = partitonRand.nextInt(partitions);
+                            } while (conf[0] == conf[1]);
+                            Arrays.sort(conf);
                         }
                     }
+                } else {//local
+                    if (r < pW) {
+                        op = BFTList.ADD;
+                    } else {
+                        op = BFTList.CONTAINS;
+                    }
+                }
 
-                    if (p == 0) {
-                        if (this.partitions == 2) {//2 partitions
-                            r = rand.nextInt(100);
+                if (p == 0) {
+                    switch (partitions) {
+                        case 1:
+                            //1 partition
+                            p = 1;
+                            break;
+                        case 2:
+                            //2 partitions
+                            r = randPart.nextInt(100);
                             if (r < 50) {
                                 p = 1;
                             } else {
                                 p = 2;
                             }
-                            /*if(op == BFTList.CONTAINS){
-                                if (r < 67) {
-                                    p = 1;
-                                } else {
-                                    p = 2;
-                                }
-                            }else{
-                                if (r < 33) {
-                                    p = 1;
-                                } else {
-                                    p = 2;
-                                }
-                            }*/
-                        } else if (this.partitions == 4) {//4 partitions
-                            r = rand.nextInt(100);
+                            break;
+                        case 4:
+                            //4 partitions
+                            r = randPart.nextInt(100);
                             if (r < 25) {
                                 p = 1;
                             } else if (r < 50) {
@@ -253,8 +268,10 @@ public class ListClientMOMP {
                             } else {
                                 p = 4;
                             }
-                        } else if (this.partitions == 6) {//6 partitions
-                            r = rand.nextInt(60);
+                            break;
+                        case 6:
+                            //6 partitions
+                            r = randPart.nextInt(60);
                             if (r < 10) {
                                 p = 1;
                             } else if (r < 20) {
@@ -268,8 +285,10 @@ public class ListClientMOMP {
                             } else {
                                 p = 6;
                             }
-                        } else {//8 partitions
-                            r = rand.nextInt(80);
+                            break;
+                        default:
+                            //8 partitions
+                            r = randPart.nextInt(80);
                             if (r < 10) {
                                 p = 1;
                             } else if (r < 20) {
@@ -287,140 +306,155 @@ public class ListClientMOMP {
                             } else {
                                 p = 8;
                             }
-                        }
+                            break;
                     }
+                }
 
-                    /*if(op == BFTList.ADD){
-                      p = 2;
-                  }else{
-                      p = 1;
-                  }*/
-                    if (p == -1) { //GW
-                        //int index = maxIndex - 1;
+                if (p == -1) { //GW
+                    //int index = maxIndex - 1;
 
-                        Integer[] reqs = new Integer[opPerReq];
-                        for (int x = 0; x < reqs.length; x++) {
-                            //reqs[x] = index;
-                            reqs[x] = indexRand.nextInt(maxIndex);
-                        }
-                        long last_send_instant = System.nanoTime();
+                    Integer[] reqs = new Integer[opPerReq];
+                    for (int x = 0; x < reqs.length; x++) {
+                        //reqs[x] = index;
+                        reqs[x] = indexRand.nextInt(maxIndex);
+                    }
+                    long last_send_instant = System.nanoTime();
+                    if (multiP >= 10) { //2 shards
+                        int opId = 200 + (conf[0] + 1) * 10 + (conf[1] + 1);
+                        store.addMultiPartition(reqs, opId, conf);
+
+                    } else { //all shards
                         store.addMultiPartition(reqs, MultipartitionMapping.GW, allPartitions);
-                        sGW.store(System.nanoTime() - last_send_instant);
-                    } else if (p == -2) {//GR
-                        //int index = maxIndex - 1;
+                    }
 
-                        Integer[] reqs = new Integer[opPerReq];
-                        for (int x = 0; x < reqs.length; x++) {
-                            //reqs[x] = index;
-                            reqs[x] = indexRand.nextInt(maxIndex);
-                        }
-                        long last_send_instant = System.nanoTime();
-                        store.containsMultiPartition(reqs,MultipartitionMapping.GR,allPartitions);
-                        sGR.store(System.nanoTime() - last_send_instant);
-                    } else if (op == BFTList.ADD) {
+                    sGW.store(System.nanoTime() - last_send_instant);
+                } else if (p == -2) {//GR
+                    //int index = maxIndex - 1;
 
-                        //int index = rand.nextInt(maxIndex);
-                        //int index = maxIndex - 1;
-                        Integer[] reqs = new Integer[opPerReq];
-                        for (int x = 0; x < reqs.length; x++) {
-                            //  reqs[x] = index;
-                            reqs[x] = indexRand.nextInt(maxIndex);
-                        }
+                    Integer[] reqs = new Integer[opPerReq];
+                    for (int x = 0; x < reqs.length; x++) {
+                        //reqs[x] = index;
+                        reqs[x] = indexRand.nextInt(maxIndex);
+                    }
+                    long last_send_instant = System.nanoTime();
+                    if (multiP >= 10) { //2 shards
+                        int opId = 100 + (conf[0] + 1) * 10 + (conf[1] + 1);
+                        store.containsMultiPartition(reqs, opId, conf);
+                    } else { //all shards
+                        store.containsMultiPartition(reqs, MultipartitionMapping.GR, allPartitions);
+                    }
+                    sGR.store(System.nanoTime() - last_send_instant);
+                } else if (op == BFTList.ADD) {
+                    Integer[] reqs = new Integer[opPerReq];
+                    for (int x = 0; x < reqs.length; x++) {
+                        //  reqs[x] = index;
+                        reqs[x] = indexRand.nextInt(maxIndex);
+                    }
 
-                        long last_send_instant = System.nanoTime();
-                        if (p == 1) {
+                    long last_send_instant = System.nanoTime();
+                    switch (p) {
+                        case 1:
                             store.addP1(reqs);
-                        } else if (p == 2) {
+                            break;
+                        case 2:
                             store.addP2(reqs);
-                        } else if (p == 3) {
+                            break;
+                        case 3:
                             store.addP3(reqs);
-                        } else if (p == 4) {
+                            break;
+                        case 4:
                             store.addP4(reqs);
-                        } else if (p == 5) {
+                            break;
+                        case 5:
                             store.addP5(reqs);
-                        } else if (p == 6) {
+                            break;
+                        case 6:
                             store.addP6(reqs);
-                        } else if (p == 7) {
+                            break;
+                        case 7:
                             store.addP7(reqs);
-                        } else {
+                            break;
+                        default:
                             store.addP8(reqs);
-                        }
+                            break;
+                    }
 
-                        sW.store(System.nanoTime() - last_send_instant);
-                    } else if (op == BFTList.CONTAINS) {
+                    sW.store(System.nanoTime() - last_send_instant);
+                } else if (op == BFTList.CONTAINS) {
+                    Integer[] reqs = new Integer[opPerReq];
+                    for (int x = 0; x < reqs.length; x++) {
+                        reqs[x] = indexRand.nextInt(maxIndex);
+                    }
 
-                        //int index = rand.nextInt(maxIndex);
-                        //int index = maxIndex - 1;
-                        Integer[] reqs = new Integer[opPerReq];
-                        for (int x = 0; x < reqs.length; x++) {
-                            //reqs[x] = index;
-                            reqs[x] = indexRand.nextInt(maxIndex);
-                        }
-
-                        long last_send_instant = System.nanoTime();
-                        if (p == 1) {
+                    long last_send_instant = System.nanoTime();
+                    switch (p) {
+                        case 1:
                             store.containsP1(reqs);
-                        } else if (p == 2) {
+                            break;
+                        case 2:
                             store.containsP2(reqs);
-                        } else if (p == 3) {
+                            break;
+                        case 3:
                             store.containsP3(reqs);
-                        } else if (p == 4) {
+                            break;
+                        case 4:
                             store.containsP4(reqs);
-                        } else if (p == 5) {
+                            break;
+                        case 5:
                             store.containsP5(reqs);
-                        } else if (p == 6) {
+                            break;
+                        case 6:
                             store.containsP6(reqs);
-                        } else if (p == 7) {
+                            break;
+                        case 7:
                             store.containsP7(reqs);
-                        } else {
+                            break;
+                        default:
                             store.containsP8(reqs);
-                        }
-
-                        sR.store(System.nanoTime() - last_send_instant);
-
+                            break;
                     }
+                    sR.store(System.nanoTime() - last_send_instant);
 
-                    if (interval > 0 && i % 50 == 100) {
-                        try {
-                            Thread.sleep(interval);
-                        } catch (InterruptedException ex) {
-                        }
-                    }
-
-                    /* if (verbose && (req % 1000 == 0)) {
-                    System.out.println(this.id + " // " + req + " operations sent!");
-                }*/
                 }
 
-                if (id == initId) {
-                    System.out.println(this.id + " //READ Average time for " + numberOfReqs + " executions (-10%) = " + sR.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //READ Standard desviation for " + numberOfReqs + " executions (-10%) = " + sR.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " // READ 90th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(90) / 1000 + " us ");
-                    System.out.println(this.id + " // READ 95th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(95) / 1000 + " us ");
-                    System.out.println(this.id + " // READ 99th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(99) / 1000 + " us ");
-
-                    System.out.println(this.id + " //WRITE Average time for " + numberOfReqs + " executions (-10%) = " + sW.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //WRITE Standard desviation for " + numberOfReqs + " executions (-10%) = " + sW.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " // WRITE 90th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(90) / 1000 + " us ");
-                    System.out.println(this.id + " // WRITE 95th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(95) / 1000 + " us ");
-                    System.out.println(this.id + " // WRITE 99th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(99) / 1000 + " us ");
-
-                    System.out.println(this.id + " //GLOBAL READ Average time for " + numberOfReqs + " executions (-10%) = " + sGR.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL READ Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGR.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL READ 90th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(90) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL READ 95th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(95) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL READ 99th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(99) / 1000 + " us ");
-
-                    System.out.println(this.id + " //GLOBAL WRITE Average time for " + numberOfReqs + " executions (-10%) = " + sGW.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL WRITE Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGW.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL WRITE 90th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(90) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL WRITE 95th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(95) / 1000 + " us ");
-                    System.out.println(this.id + " //GLOBAL WRITE 99th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(99) / 1000 + " us ");
-
+                if (interval > 0 && i % 50 == 100) {
+                    try {
+                        Thread.sleep(interval);
+                    } catch (InterruptedException ex) {
+                    }
                 }
+
+            }
+
+            if (id == initId) {
+                System.out.println(this.id + " //READ Average time for " + numberOfReqs + " executions (-10%) = " + sR.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //READ Standard desviation for " + numberOfReqs + " executions (-10%) = " + sR.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " // READ 90th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(90) / 1000 + " us ");
+                System.out.println(this.id + " // READ 95th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " // READ 99th percentile for " + numberOfReqs + " executions = " + sR.getPercentile(99) / 1000 + " us ");
+
+                System.out.println(this.id + " //WRITE Average time for " + numberOfReqs + " executions (-10%) = " + sW.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //WRITE Standard desviation for " + numberOfReqs + " executions (-10%) = " + sW.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " // WRITE 90th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(90) / 1000 + " us ");
+                System.out.println(this.id + " // WRITE 95th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " // WRITE 99th percentile for " + numberOfReqs + " executions = " + sW.getPercentile(99) / 1000 + " us ");
+
+                System.out.println(this.id + " //GLOBAL READ Average time for " + numberOfReqs + " executions (-10%) = " + sGR.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL READ Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGR.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL READ 90th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(90) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL READ 95th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL READ 99th percentile for " + numberOfReqs + " executions = " + sGR.getPercentile(99) / 1000 + " us ");
+
+                System.out.println(this.id + " //GLOBAL WRITE Average time for " + numberOfReqs + " executions (-10%) = " + sGW.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL WRITE Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGW.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL WRITE 90th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(90) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL WRITE 95th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //GLOBAL WRITE 99th percentile for " + numberOfReqs + " executions = " + sGW.getPercentile(99) / 1000 + " us ");
+
             }
         }
 
+        
         public void weighting() {
 
             //System.out.println("Warm up...");
@@ -441,11 +475,11 @@ public class ListClientMOMP {
             Random randGlobal = new Random();
 
             Random indexRand = new Random();
-
             int[] allPartitions = new int[partitions];
             for (int i = 0; i < partitions; i++) {
                 allPartitions[i] = i;
             }
+
 //            WorkloadGenerator work = new WorkloadGenerator(numberOfOps);
             for (int i = 0; i < numberOfReqs && !stop; i++) {
 
@@ -454,26 +488,26 @@ public class ListClientMOMP {
                         //Thread.currentThread().sleep(20000);
                         Thread.currentThread().sleep(2000);
                     } catch (InterruptedException ex) {
-                        Logger.getLogger(ListClientMOMP.class.getName()).log(Level.SEVERE, null, ex);
+                        Logger.getLogger(ListClientMOMPHibrid.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 }
 
                 ExtStorage st = null;
 
                 int p = 0;
-                
+
                 int g = randGlobal.nextInt(100);
                 int r = randOp.nextInt(100);
                 if (g < 5) {//global: 5%
-                        //p = -2;
-                        if (r < 15) {
-                            //GW
-                            p = -1;
-                        } else {
-                            //GR;
-                            p = -2;
-                        }
-                } else{//local
+                    //p = -2;
+                    if (r < 15) {
+                        //GW
+                        p = -1;
+                    } else {
+                        //GR;
+                        p = -2;
+                    }
+                } else {//local
                     if (r < 15) {
 
                         op = BFTList.ADD;
@@ -481,7 +515,6 @@ public class ListClientMOMP {
                         op = BFTList.CONTAINS;
                     }
                 }
-                
 
                 if (p == 0) {
                     if (this.partitions == 2) {//2 partitions
@@ -519,7 +552,7 @@ public class ListClientMOMP {
                         reqs[x] = indexRand.nextInt(maxIndex);
                     }
                     long last_send_instant = System.nanoTime();
-                    store.addMultiPartition(reqs, MultipartitionMapping.GW,allPartitions);
+                    store.addMultiPartition(reqs, MultipartitionMapping.GW, allPartitions);
                     sGW.store(System.nanoTime() - last_send_instant);
                 } else if (p == -2) {//GR
 
@@ -528,7 +561,7 @@ public class ListClientMOMP {
                         reqs[x] = indexRand.nextInt(maxIndex);
                     }
                     long last_send_instant = System.nanoTime();
-                    store.containsMultiPartition(reqs,MultipartitionMapping.GR,allPartitions);
+                    store.containsMultiPartition(reqs, MultipartitionMapping.GW, allPartitions);
                     sGR.store(System.nanoTime() - last_send_instant);
                 } else if (op == BFTList.ADD) {
 
@@ -580,25 +613,23 @@ public class ListClientMOMP {
             }
 
             if (id == initId) {
-                
 
-                    System.out.println(this.id + " //P1 Average time for " + numberOfReqs + " executions (-10%) = " + sP1.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //P1 Standard desviation for " + numberOfReqs + " executions (-10%) = " + sP1.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //P1 95th for " + numberOfReqs + " executions (-10%) = " + sP1.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //P1 Average time for " + numberOfReqs + " executions (-10%) = " + sP1.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //P1 Standard desviation for " + numberOfReqs + " executions (-10%) = " + sP1.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //P1 95th for " + numberOfReqs + " executions (-10%) = " + sP1.getPercentile(95) / 1000 + " us ");
 
-                    System.out.println(this.id + " //P2 Average time for " + numberOfReqs + " executions (-10%) = " + sP2.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //P2 Standard desviation for " + numberOfReqs + " executions (-10%) = " + sP2.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //P2 95th for " + numberOfReqs + " executions (-10%) = " + sP2.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //P2 Average time for " + numberOfReqs + " executions (-10%) = " + sP2.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //P2 Standard desviation for " + numberOfReqs + " executions (-10%) = " + sP2.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //P2 95th for " + numberOfReqs + " executions (-10%) = " + sP2.getPercentile(95) / 1000 + " us ");
 
-                    System.out.println(this.id + " //GR Average time for " + numberOfReqs + " executions (-10%) = " + sGR.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GR Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGR.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GR 95th for " + numberOfReqs + " executions (-10%) = " + sGR.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //GR Average time for " + numberOfReqs + " executions (-10%) = " + sGR.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //GR Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGR.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //GR 95th for " + numberOfReqs + " executions (-10%) = " + sGR.getPercentile(95) / 1000 + " us ");
 
-                    System.out.println(this.id + " //GW Average time for " + numberOfReqs + " executions (-10%) = " + sGW.getAverage(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GW Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGW.getDP(true) / 1000 + " us ");
-                    System.out.println(this.id + " //GW 95th for " + numberOfReqs + " executions (-10%) = " + sGW.getPercentile(95) / 1000 + " us ");
+                System.out.println(this.id + " //GW Average time for " + numberOfReqs + " executions (-10%) = " + sGW.getAverage(true) / 1000 + " us ");
+                System.out.println(this.id + " //GW Standard desviation for " + numberOfReqs + " executions (-10%) = " + sGW.getDP(true) / 1000 + " us ");
+                System.out.println(this.id + " //GW 95th for " + numberOfReqs + " executions (-10%) = " + sGW.getPercentile(95) / 1000 + " us ");
 
-                
                 /*else if (op == BFTList.ADD) {
                     System.out.println(this.id + " //WRITE W1 Average time for " + numberOfReqs + " executions (-10%) = " + sW1.getAverage(true) / 1000 + " us ");
                     System.out.println(this.id + " //WRITE W1 Standard desviation for " + numberOfReqs + " executions (-10%) = " + sW1.getDP(true) / 1000 + " us ");

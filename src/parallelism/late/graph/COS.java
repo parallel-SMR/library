@@ -7,10 +7,7 @@ package parallelism.late.graph;
 
 import java.util.concurrent.Semaphore;
 import parallelism.late.ConflictDefinition;
-import parallelism.late.DefaultConflictDefinition;
 import parallelism.MessageContextPair;
-import parallelism.ParallelMapping;
-import parallelism.late.CBASEScheduler;
 
 /**
  *
@@ -21,21 +18,21 @@ public abstract class COS{
    
  
 
-    private Semaphore space = null;                // counting semaphore for size of graph
-    private Semaphore ready = new Semaphore(0);  // tells if there is ready to execute
+    protected Semaphore space = null;                // counting semaphore for size of graph
+    protected Semaphore ready = new Semaphore(0);  // tells if there is ready to execute
     
-    protected CBASEScheduler scheduler;
+    protected ConflictDefinition cd;
     
     
-    public COS(int limit, CBASEScheduler scheduler) {
+    public COS(int limit, ConflictDefinition cd) {
         this.space = new Semaphore(limit);
-        this.scheduler = scheduler;
+        this.cd = cd;
     } 
      
      
     
     protected boolean isDependent(MessageContextPair thisRequest, MessageContextPair otherRequest){
-        return this.scheduler.isDependent(thisRequest, otherRequest);
+        return this.cd.isDependent(thisRequest, otherRequest);
     }
     
     public void insert(Object request) throws InterruptedException {

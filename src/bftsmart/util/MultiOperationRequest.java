@@ -21,14 +21,16 @@ import java.util.logging.Logger;
  */
 public class MultiOperationRequest {
 
-    public Operation[] operations;
+    public short[] operations;
+    public short opId;
 
-    public MultiOperationRequest(int number) {
-        this.operations = new Operation[number];
+    public MultiOperationRequest(int number, short opId) {
+        this.operations = new short[number];
+        this.opId = opId;
     }
 
-    public void add(int index, byte[] data, int classId){
-        this.operations[index] = new Operation(data, classId);
+    public void add(int index, short data){
+        this.operations[index] = data;
     }
     
     public MultiOperationRequest(byte[] buffer) {
@@ -37,14 +39,12 @@ public class MultiOperationRequest {
             ByteArrayInputStream in = new ByteArrayInputStream(buffer);
             dis = new DataInputStream(in);
             
+            this.opId = dis.readShort();
             
-            this.operations = new Operation[dis.readInt()];
+            this.operations = new short[dis.readShort()];
             
             for(int i = 0; i < this.operations.length; i++){
-                this.operations[i] = new Operation();
-                this.operations[i].classId = dis.readInt();
-                this.operations[i].data = new byte[dis.readInt()];
-                dis.readFully(this.operations[i].data);
+                this.operations[i] = dis.readShort();
             }
         } catch (IOException ex) {
             ex.printStackTrace();
@@ -64,16 +64,13 @@ public class MultiOperationRequest {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             DataOutputStream oos = new DataOutputStream(baos);
             
-            oos.writeInt(operations.length);
+            oos.writeShort(opId);
+            
+            oos.writeShort(operations.length);
             
             for(int i = 0; i < operations.length; i++){
-                
-                oos.writeInt(this.operations[i].classId);
-                oos.writeInt(this.operations[i].data.length);
-                oos.write(this.operations[i].data);
+                oos.writeShort(this.operations[i]);
             }
-            //oos.flush();
-            //baos.flush();
             oos.close();
             return baos.toByteArray();
         } catch (Exception e) {
@@ -82,20 +79,24 @@ public class MultiOperationRequest {
         return null;
     }
 
-    public class Operation {
+   /* public class Operation {
 
+        public byte[] data;
+        public int classId;
+        public int opId;
+        
         public Operation() {
         }
 
-        public Operation(byte[] data, int classId) {
+        public Operation(byte[] data, int classId, int opId) {
             this.data = data;
             this.classId = classId;
+            this.opId = opId;
         }
 
         
         
-        public byte[] data;
-        public int classId;
-    }
+
+    }*/
 
 }

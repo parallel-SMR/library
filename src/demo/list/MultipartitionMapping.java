@@ -13,27 +13,85 @@ import parallelism.ClassToThreads;
  */
 public class MultipartitionMapping {
     
-    public static final int R1 = 11;
-    public static final int R2 = 12;
-    public static final int R3 = 13;
-    public static final int R4 = 14;
-    public static final int R5 = 15;
-    public static final int R6 = 16;
-    public static final int R7 = 17;
-    public static final int R8 = 18;
+    public static final short R1 = 11;
+    public static final short R2 = 12;
+    public static final short R3 = 13;
+    public static final short R4 = 14;
+    public static final short R5 = 15;
+    public static final short R6 = 16;
+    public static final short R7 = 17;
+    public static final short R8 = 18;
     
-    public static final int W1 = 21;
-    public static final int W2 = 22;
-    public static final int W3 = 23;
-    public static final int W4 = 24;
-    public static final int W5 = 25;
-    public static final int W6 = 26;
-    public static final int W7 = 27;
-    public static final int W8 = 28;
+    public static final short W1 = 21;
+    public static final short W2 = 22;
+    public static final short W3 = 23;
+    public static final short W4 = 24;
+    public static final short W5 = 25;
+    public static final short W6 = 26;
+    public static final short W7 = 27;
+    public static final short W8 = 28;
     
-    public static final int GR = 31;
-    public static final int GW = 41;
+    public static final short GR = 31;
+    public static final short GW = 41;
     
+    
+    public static final short R12 = 112;
+    public static final short R13 = 113;
+    public static final short R14 = 114;
+    public static final short R15 = 115;
+    public static final short R16 = 116;
+    public static final short R17 = 117;
+    public static final short R18 = 118;
+    public static final short R23 = 123;
+    public static final short R24 = 124;
+    public static final short R25 = 125;
+    public static final short R26 = 126;
+    public static final short R27 = 127;
+    public static final short R28 = 128;
+    public static final short R34 = 134;
+    public static final short R35 = 135;
+    public static final short R36 = 136;
+    public static final short R37 = 137;
+    public static final short R38 = 138;
+    public static final short R45 = 145;
+    public static final short R46 = 146;
+    public static final short R47 = 147;
+    public static final short R48 = 148;
+    public static final short R56 = 156;
+    public static final short R57 = 157;
+    public static final short R58 = 158;
+    public static final short R67 = 167;
+    public static final short R68 = 168;
+    public static final short R78 = 178;
+    
+    public static final short W12 = 212;
+    public static final short W13 = 213;
+    public static final short W14 = 214;
+    public static final short W15 = 215;
+    public static final short W16 = 216;
+    public static final short W17 = 217;
+    public static final short W18 = 218;
+    public static final short W23 = 223;
+    public static final short W24 = 224;
+    public static final short W25 = 225;
+    public static final short W26 = 226;
+    public static final short W27 = 227;
+    public static final short W28 = 228;
+    public static final short W34 = 234;
+    public static final short W35 = 235;
+    public static final short W36 = 236;
+    public static final short W37 = 237;
+    public static final short W38 = 238;
+    public static final short W45 = 245;
+    public static final short W46 = 246;
+    public static final short W47 = 247;
+    public static final short W48 = 248;
+    public static final short W56 = 256;
+    public static final short W57 = 257;
+    public static final short W58 = 258;
+    public static final short W67 = 267;
+    public static final short W68 = 268;
+    public static final short W78 = 278;
     
     public static ClassToThreads[] getM2P4T2(){
         ClassToThreads[] cts = new ClassToThreads[10];
