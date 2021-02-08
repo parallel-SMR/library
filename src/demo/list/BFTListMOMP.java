@@ -27,8 +27,8 @@ public class BFTListMOMP<V> extends BFTList<V> {
     }
 
     public boolean addP1(V[] e) {
-        //return addFinal(e, em.getClassId(0), MultipartitionMapping.W1);
-        return addFinal(e, ParallelMapping.SYNC_ALL, MultipartitionMapping.W1);
+        return addFinal(e, em.getClassId(0), MultipartitionMapping.W1);
+        //return addFinal(e, ParallelMapping.SYNC_ALL, MultipartitionMapping.W1);
     }
 
     public boolean addP2(V[] e) {
@@ -161,8 +161,8 @@ public class BFTListMOMP<V> extends BFTList<V> {
     }
 
     public boolean containsP1(V[] e) {
-       // return containsFinal(e, em.getClassId(0), MultipartitionMapping.R1);
-        return containsFinal(e, ParallelMapping.CONC_ALL, MultipartitionMapping.R1);
+        return containsFinal(e, em.getClassId(0), MultipartitionMapping.R1);
+        //return containsFinal(e, ParallelMapping.CONC_ALL, MultipartitionMapping.R1);
     }
 
     public boolean containsP2(V[] e) {
